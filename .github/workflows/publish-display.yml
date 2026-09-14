@@ -1,0 +1,36 @@
+name: Publish Hanabishi KOS public demo
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'hanabishi-kos-demo/**'
+      - '.github/workflows/publish-display.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish to display.dev
+        run: |
+          set -euo pipefail
+          RESPONSE=$(curl -sS -X POST https://api.display.dev/v1/public/artifacts \
+            -F file=@hanabishi-kos-demo/index.html \
+            -F 'name=Hanabishi KOS Demo v0.7')
+          echo "DISPLAY_RESPONSE=$RESPONSE"
+          echo "$RESPONSE" > /tmp/display-response.json
+          python - <<'PY'
+          import json
+          p='/tmp/display-response.json'
+          data=json.load(open(p))
+          print('PUBLIC_URL=' + str(data.get('url') or data.get('preview_url') or data.get('public_url') or data.get('previewUrl') or ''))
+          print('CLAIM_URL=' + str(data.get('claim_url') or data.get('claimUrl') or ''))
+          print('EXPIRES_AT=' + str(data.get('expires_at') or data.get('expiresAt') or ''))
+          PY
