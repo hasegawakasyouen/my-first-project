@@ -18,18 +18,44 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Syntax check
+        run: |
+          node --check hanabishi-kos-demo/shell.js
+          node --check hanabishi-kos-demo/data.js
+          node --check hanabishi-kos-demo/ui1.js
+          node --check hanabishi-kos-demo/ui2.js
+
+      - name: Build self-contained public HTML
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          root = Path('hanabishi-kos-demo')
+          html = (root / 'index.html').read_text()
+          css = (root / 'style.css').read_text()
+          html = html.replace('<link rel="stylesheet" href="style.css">', f'<style>{css}</style>')
+          for fn in ['shell.js', 'data.js', 'ui1.js', 'ui2.js']:
+              js = (root / fn).read_text()
+              html = html.replace(f'<script src="{fn}"></script>', f'<script>{js}</script>')
+          out = Path('/tmp/hanabishi-kos-v0.7-latest.html')
+          out.write_text(html)
+          print(f'PUBLIC_HTML_BYTES={out.stat().st_size}')
+          required = ['顧客マスタ','仕入先マスタ','価格ジャーニー','データ監査','年・月・日 比較','ランク A→B→C']
+          for text in required:
+              assert text in html, f'missing: {text}'
+          print('LATEST_UI_CHECK=OK')
+          PY
+
       - name: Publish to display.dev
         run: |
           set -euo pipefail
           RESPONSE=$(curl -sS -X POST https://api.display.dev/v1/public/artifacts \
-            -F file=@hanabishi-kos-demo/index.html \
-            -F 'name=Hanabishi KOS Demo v0.7')
+            -F file=@/tmp/hanabishi-kos-v0.7-latest.html \
+            -F 'name=Hanabishi KOS Demo v0.7 Latest')
           echo "DISPLAY_RESPONSE=$RESPONSE"
           echo "$RESPONSE" > /tmp/display-response.json
           python - <<'PY'
           import json
-          p='/tmp/display-response.json'
-          data=json.load(open(p))
+          data=json.load(open('/tmp/display-response.json'))
           print('PUBLIC_URL=' + str(data.get('url') or data.get('preview_url') or data.get('public_url') or data.get('previewUrl') or ''))
           print('CLAIM_URL=' + str(data.get('claim_url') or data.get('claimUrl') or ''))
           print('EXPIRES_AT=' + str(data.get('expires_at') or data.get('expiresAt') or ''))
